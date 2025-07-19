@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Depends,status,UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 import shutil
-import fitz
 from docling.document_converter import DocumentConverter
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,35 +17,35 @@ def token_verification(credentials: HTTPAuthorizationCredentials = Depends(secur
         )
     return credentials.credentials
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-
-    doc = fitz.open(pdf_path)
-
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    return text
-
 @app.post("/upload-pdf/")
 async def upload_pdf(
     file: UploadFile = File(...),
-    token: None = Depends(token_verification)
-
+    token: str = Depends(token_verification)
 ):
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be a PDF",
+        )
     temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
 
-    converter = DocumentConverter()
-    text = converter.convert(temp_path, "text")
-    os.remove(temp_path)
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        converter = DocumentConverter()
+        doc = converter.convert(temp_path).document
+        markdown_content = doc.export_to_markdown()
+        paragraphs = [p.strip() for p in markdown_content.split('\n') if p.strip()]
+        docling_json = {
+            "title": file.filename,
+            "paragraphs": [{"id": i + 1, "text": para} for i, para in enumerate(paragraphs)],
+        }
 
-    paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
-    docling_json = {
-        "title": file.filename,
-        "paragraphs": [{"id": i + 1, "text": para} for i,para in enumerate(paragraphs)],
-    }
-    return docling_json 
+        return docling_json
+    finally:
+        # Xóa file tạm để tránh lưu rác
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 """
@@ -57,7 +56,7 @@ https://arxiv.org/pdf/1512.03385
 
 
 """
-source = "paper.pdf"
+
 
 
 
