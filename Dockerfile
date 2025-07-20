@@ -11,8 +11,7 @@ COPY . .
 ENV NIXPACKS_PATH=/opt/venv/bin:${NIXPACKS_PATH:-}
 
 # Install dependencies
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Run your app (replace this line with your app's start command)
 CMD ["python3", "main.py"]
