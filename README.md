@@ -2,7 +2,7 @@
 
 The goal of this project is to utilize fastapi and pdf parser
 
-# Setup the Repository
+## Setup the Repository
 
 Create your folder Example: fastapi-pdf-parser
 Then create a virtual env
@@ -34,6 +34,10 @@ pip install "docling[pdf]"
 + Configuration setup ```heroku config:set BEARERE_TOKEN = your_own_secret_key```
 
 + Pushing it onto main: ```git push heroku main```
+
+## Deploying an app on SyncStream
+
+
 
 
 
