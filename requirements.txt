@@ -1,6 +1,23 @@
+# Core dependencies
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+python-dotenv==1.1.1
+pydantic==2.10.4
+
+# PDF processing
 docling==2.41.0
 docling-core==2.43.0
 docling-parse==4.1.0
-fastapi==0.116.1
-python-dotenv==1.1.1
-uvicorn==0.35.0
+
+# Additional FastAPI dependencies
+python-multipart==0.0.12
+
+# HTTP client for testing - updated to fix conflict with docling
+requests>=2.32.2,<3.0.0
+httpx==0.28.1
+
+# PDF creation for testing
+reportlab==4.0.4
+
+# Additional utilities
+typing-extensions==4.12.2
