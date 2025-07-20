@@ -3,4 +3,5 @@ docling-core==2.43.0
 docling-parse==4.1.0
 fastapi==0.116.1
 python-dotenv==1.1.1
+python-multipart==0.0.20
 uvicorn==0.35.0
