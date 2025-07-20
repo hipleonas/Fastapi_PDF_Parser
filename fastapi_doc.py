@@ -1,24 +1,9 @@
 """
 =====This file is used to practice FastAPI =====
-"""
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+"""
 
-app = FastAPI()
-
-
-@app.get("/items/{item_id}")
-async def read_item(item_id: int):
-    return {"item_id": item_id}
-
-
-@app.get("/users/me")
-async def read_user_me():
-    return {"user": "curent_user"}
-
-@app.get("/users/{user_id}")
-async def read_user_id(user_id: str):
-    return  {"user_id": user_id}
 
 #YOU CANNOT REDEFINE THE SAME PATH LIKE /users and /users again
 

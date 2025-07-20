@@ -1,12 +1,10 @@
 #Convert a single pdf document 
 """
 Demo PDF Link: paper.pdf
-"""
 from docling.document_converter import DocumentConverter
+"""
 
-avix_source = "paper.pdf"
-converter = DocumentConverter()
-result = converter.convert(avix_source)
+
 #using prefetch model
 
 
@@ -17,7 +15,7 @@ Anyhow, there are valid use cases for using remote services
  for example invoking OCR engines from cloud vendors or the usage of hosted LLMs.
 
 """
-if __name__ == "__main__":
-    # Print the document in markdown format
-    print(result)
+# if __name__ == "__main__":
+#     # Print the document in markdown format
+#     print(result)
 
