@@ -54,6 +54,7 @@ async def crawl_course(page, url):
 
         # Lấy danh sách link khóa học
         course_links = await get_course_links(page)
+        #./course/code
         print(f"Found {len(course_links)} course links")
 
         for link in course_links:
