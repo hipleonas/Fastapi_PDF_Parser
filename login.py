@@ -30,71 +30,48 @@ def extract_data(content, url):
         "images": imgs,
         "videos": vids
     }
-def get_all_links(content, url):
-    soup = BeautifulSoup(content, "html.parser")
-    to_links = []
-    for tag in soup.find_all(attrs={"to": True}):
-        print(tag)
-    #     link = tag.get("to")
-    #     print(link)
-    #     if link and link.startswith("/courses/"):
-    #         to_links.append(link)
-    return to_links
+
 async def crawl_course(page, url):
     if url in visited_url:
         return
     visited_url.add(url)
-    # print(f"Crawling: {url}")
-
 
     try: 
-        print(f"Visiting {url}")
-        await page.goto(url,timeout=0)
+        # print(f"Visiting {url}")
+        # await page.goto(url,timeout=0)
+        await page.goto(url, wait_until='networkidle', timeout=30000)
+        await page.wait_for_selector('course-card-cover', timeout=10000)
 
-        await page.wait_for_selector('course-card-cover')
-
+        # await page.wait_for_selector('course-card-cover', timeout = 10000)
+    
         # Lấy các link từ attribute `to`
         elements = await page.query_selector_all('course-card-cover')
         for elem in elements:
             to_attr = await elem.get_attribute('to')
-            # print("Found TO:", to_attr)
+            print("Found TO:", to_attr)
             if to_attr and to_attr.startswith("/courses/"):
-                full_url = f"https://www.classcentral.com{to_attr}"
-                # lưu hoặc xử lý link
-                print(full_url)
-                data = extract_data(await page.content(), full_url)
-                crawled_data.append(data)
-        
-
-        # content = await page.content()
-        # # Check if the URL is in the ignore list
-        # # parsed_url = urlparse(url)
-        # #Trích xuất taart cả các links
-        # links = get_all_links(content, url)
-        # print(links)
-
-        # for link in links:
-        #     data = extract_data(content, link)
-        #     crawled_data.append(data)
-
-
-        # if not any(ignore in parsed_url.path for ignore in ignore_paths):
-        #     data = extract_data(content, url)
-        #     crawled_data.append(data)
-        # data = extract_data(content, url)
-
-        # crawled_data.append(data)
-
-        # soup = BeautifulSoup(content, "html.parser")
-
-
-        # for a in soup.find_all("a", href = True):
-        #     full_url = urljoin(url, a["href"])
-        #     parsed_full = urlparse(full_url)
-
-        #     if BASE_URL in full_url and full_url not in visited_url  and not any(ignore in parsed_full.path for ignore in ignore_paths):
-        #         await crawl_course(page, full_url)
-
+                full_url = urljoin(BASE_URL, to_attr)
+                if full_url not in visited_url:
+                    visited_url.add(full_url)
+                    await page.goto(full_url, wait_until='networkidle', timeout=30000)
+                    html = await page.content()
+                    course_data = extract_data(html, full_url)
+                    crawled_data.append(course_data)
+                    # save_json()
+                    await page.go_back(wait_until='networkidle')
+                    await page.wait_for_load_state('networkidle', timeout=30000)
+            # if to_attr and to_attr.startswith("/courses/"):
+            #     full_url = urljoin(BASE_URL, f"fitstop{to_attr}")
+            #     # lưu hoặc xử lý link
+            #     print(full_url)
+                # if full_url not in visited_url:
+                #     visited_url.add(full_url)
+                #     await page.goto(full_url, timeout = 0)
+                #     html = await page.content()
+                #     # print(html)
+                #     course_data = extract_data(html, full_url)
+                #     crawled_data.append(course_data)
+                #     await page.go_back()
     except Exception as e:
         print(f"Error crawling {url}: {e}")
 
@@ -108,19 +85,23 @@ def save_json():
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
-        page = await browser.new_page()
-        await page.goto(BASE_URL, timeout=0)
+        context = await browser.new_context()
+
+        page = await context.new_page()
+        await page.goto(BASE_URL, wait_until='networkidle',timeout=30000)
         print("Open page success, you can now interact with the page")
         # await page.wait_for_selector('input[name="user[email]"]', timeout=30000)
         #Wait to fill in the form
         await page.locator('input[name="username"]').fill(USERNAME)
         await page.locator('input[name="password"]').fill(PASSWORD)
-
-        # Nhấn nút login
         await page.locator('button[type="submit"]').click()
+        await page.wait_for_load_state('networkidle')
 
         # await page.wait_for_load_state('networkidle')
         print('Login completed')
+        await context.storage_state(path="auth.json")
+
+
         await crawl_course(page, BASE_URL)
         save_json()
         await browser.close() # giữ cho browser không bị đóng

@@ -1,76 +1,102 @@
-from playwright.sync_api import sync_playwright
+import json
+import os
+import asyncio
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-import json, os
+from dotenv import load_dotenv
 
-BASE_URL = "https://academy.fitstop.com"
-LOGIN_URL = f"{BASE_URL}/users/sign_in"
-USERNAME = "your_email@example.com"
-PASSWORD = "your_password"
-visited_urls = set()
+load_dotenv()
+
+visited_url = set()
 crawled_data = []
+ignore_paths = ["/notifications", "/history", "/logout", "/profile", "/settings", "/contact"]
+BASE_URL = os.getenv("BASE_URL")
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
+# LOGIN_URL = f"{BASE_URL}/sign_in"
 
-def save_json():
-    with open("fitstop_data.json", "w", encoding="utf-8") as f:
-        json.dump(crawled_data, f, ensure_ascii=False, indent=2)
-
-def extract_data(page, url):
-    html = page.content()
-    soup = BeautifulSoup(html, "html.parser")
-
-    content_text = soup.get_text(separator='\n')
-    images = [urljoin(url, img['src']) for img in soup.find_all("img") if "src" in img.attrs]
-    videos = [urljoin(url, video['src']) for video in soup.find_all("video") if "src" in video.attrs]
-
-    # YouTube / embedded iframe
+def extract_data(content, url):
+    soup = BeautifulSoup(content, "html.parser")
+    text = soup.get_text(separator="\n")
+    imgs = [urljoin(url, img["src"]) for img in soup.find_all("img") if "src" in img.attrs]
+    vids = [urljoin(url, vid["src"]) for vid in soup.find_all("video") if "src" in vid.attrs]
     iframes = [iframe['src'] for iframe in soup.find_all("iframe") if "youtube" in iframe.get("src", "")]
-    videos += iframes
-
+    vids = vids + iframes
     return {
         "url": url,
-        "text": content_text,
-        "images": images,
-        "videos": videos
+        "text": text,
+        "images": imgs,
+        "videos": vids
     }
 
-def crawl_course(page, url):
-    if url in visited_urls:
+async def get_course_links(page):
+    try:
+        # Sử dụng JavaScript để lấy tất cả các link khóa học
+        links = await page.evaluate('''() => {
+            const elements = document.querySelectorAll('a[href*="/courses/"]');
+            return Array.from(elements).map(el => el.getAttribute('href'));
+        }''')
+        return [link for link in links if link and link.startswith("/courses/")]
+    except Exception as e:
+        print(f"Error getting course links: {e}")
+        return []
+
+async def crawl_course(page, url):
+    if url in visited_url:
         return
-    visited_urls.add(url)
-    
-    print(f"[+] Crawling: {url}")
-    page.goto(url)
-    page.wait_for_timeout(2000)
+    visited_url.add(url)
+    print(f"Crawling: {url}")
 
-    data = extract_data(page, url)
-    crawled_data.append(data)
+    try:
+        await page.goto(url, wait_until='networkidle', timeout=30000)
+        await page.wait_for_load_state('networkidle', timeout=30000)
 
-    soup = BeautifulSoup(page.content(), "html.parser")
-    for a in soup.find_all("a", href=True):
-        full_url = urljoin(url, a['href'])
-        if BASE_URL in full_url and full_url not in visited_urls:
-            crawl_course(page, full_url)
+        # Lấy danh sách link khóa học
+        course_links = await get_course_links(page)
+        print(f"Found {len(course_links)} course links")
 
-def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
+        for link in course_links:
+            full_url = urljoin(BASE_URL, link)
+            if full_url not in visited_url and not any(ignore in full_url for ignore in ignore_paths):
+                visited_url.add(full_url)
+                print(f"Crawling course: {full_url}")
+                try:
+                    await page.goto(full_url, wait_until='networkidle', timeout=30000)
+                    html = await page.content()
+                    course_data = extract_data(html, full_url)
+                    crawled_data.append(course_data)
+                    save_json()
+                    await page.go_back(wait_until='networkidle')
+                    await page.wait_for_load_state('networkidle', timeout=30000)
+                except Exception as e:
+                    print(f"Error crawling course {full_url}: {e}")
+                    continue
 
-        # Go to login page
-        page.goto(LOGIN_URL)
-        page.fill('input[name="user[email]"]', USERNAME)
-        page.fill('input[name="user[password]"]', PASSWORD)
-        page.click('input[name="commit"]')
-        page.wait_for_timeout(3000)
+    except Exception as e:
+        print(f"Error crawling {url}: {e}")
 
-        # Start crawling course homepage
-        crawl_course(page, f"{BASE_URL}/collections")
+def save_json():
+    with open("crawled_data.json", "w", encoding="utf-8") as f:
+        json.dump(crawled_data, f, ensure_ascii=False, indent=2)
+    print("Saved to crawled_data.json")
 
-        browser.close()
+async def main():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context()
+        page = await context.new_page()
+        await page.goto(BASE_URL, wait_until='networkidle', timeout=30000)
+        print("Open login page success")
 
-    save_json()
-    print("[✓] Done. Saved to fitstop_data.json")
+        await page.locator('input[name="username"]').fill(USERNAME)
+        await page.locator('input[name="password"]').fill(PASSWORD)
+        await page.locator('button[type="submit"]').click()
+        await page.wait_for_load_state('networkidle', timeout=30000)
+        print('Login completed')
 
-if __name__ == "__main__":
-    main()
+        await context.storage_state(path="auth.json")  # Lưu phiên đăng nhập
+        await crawl_course(page, BASE_URL)
+        await browser.close()
+
+asyncio.run(main())
