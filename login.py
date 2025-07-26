@@ -6,17 +6,18 @@ from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from dotenv import load_dotenv
+import requests
 load_dotenv()
 visited_url = set()
 crawled_data = []
-
+ignore_paths = ["/notifications", "/history", "/logout","/profile","/settings", "/contact"]
 BASE_URL = os.getenv("BASE_URL")
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 LOGIN_URL = f"{BASE_URL}/{USERNAME}/sign_in"
 
-def extract_data(page, url):
-    soup = BeautifulSoup(page.content(), "html.parser")
+def extract_data(content, url):
+    soup = BeautifulSoup(content, "html.parser")
     text = soup.get_text(separator="\n")
 
     imgs = [urljoin(url, img["src"]) for img in soup.find_all("img") if "src" in img.attrs]
@@ -29,28 +30,70 @@ def extract_data(page, url):
         "images": imgs,
         "videos": vids
     }
+def get_all_links(content, url):
+    soup = BeautifulSoup(content, "html.parser")
+    to_links = []
+    for tag in soup.find_all(attrs={"to": True}):
+        print(tag)
+    #     link = tag.get("to")
+    #     print(link)
+    #     if link and link.startswith("/courses/"):
+    #         to_links.append(link)
+    return to_links
 async def crawl_course(page, url):
     if url in visited_url:
         return
     visited_url.add(url)
-    print(f"Crawling: {url}")
+    # print(f"Crawling: {url}")
 
 
-    try:
+    try: 
+        print(f"Visiting {url}")
         await page.goto(url,timeout=0)
 
-        content = await page.content()
+        await page.wait_for_selector('course-card-cover')
 
-        data = extract_data(content, url)
+        # Lấy các link từ attribute `to`
+        elements = await page.query_selector_all('course-card-cover')
+        for elem in elements:
+            to_attr = await elem.get_attribute('to')
+            # print("Found TO:", to_attr)
+            if to_attr and to_attr.startswith("/courses/"):
+                full_url = f"https://www.classcentral.com{to_attr}"
+                # lưu hoặc xử lý link
+                print(full_url)
+                data = extract_data(await page.content(), full_url)
+                crawled_data.append(data)
+        
 
-        crawled_data.append(data)
-        soup = BeautifulSoup(content, "html.parser")
+        # content = await page.content()
+        # # Check if the URL is in the ignore list
+        # # parsed_url = urlparse(url)
+        # #Trích xuất taart cả các links
+        # links = get_all_links(content, url)
+        # print(links)
+
+        # for link in links:
+        #     data = extract_data(content, link)
+        #     crawled_data.append(data)
 
 
-        for a in soup.find_all("a", href = True):
-            full_url = urljoin(url, a["href"])
-            if BASE_URL in full_url and full_url not in visited_url:
-                await crawl_course(page, full_url)
+        # if not any(ignore in parsed_url.path for ignore in ignore_paths):
+        #     data = extract_data(content, url)
+        #     crawled_data.append(data)
+        # data = extract_data(content, url)
+
+        # crawled_data.append(data)
+
+        # soup = BeautifulSoup(content, "html.parser")
+
+
+        # for a in soup.find_all("a", href = True):
+        #     full_url = urljoin(url, a["href"])
+        #     parsed_full = urlparse(full_url)
+
+        #     if BASE_URL in full_url and full_url not in visited_url  and not any(ignore in parsed_full.path for ignore in ignore_paths):
+        #         await crawl_course(page, full_url)
 
     except Exception as e:
         print(f"Error crawling {url}: {e}")
@@ -70,17 +113,15 @@ async def main():
         print("Open page success, you can now interact with the page")
         # await page.wait_for_selector('input[name="user[email]"]', timeout=30000)
         #Wait to fill in the form
-        await page.wait_for_selector('input[name="username"]')
-        await page.wait_for_selector('input[name="password"]')
+        await page.locator('input[name="username"]').fill(USERNAME)
+        await page.locator('input[name="password"]').fill(PASSWORD)
 
-        await page.fill('input[name="user[username]"]', USERNAME)
-        await page.fill('input[name="user[password]"]', PASSWORD)
-
-        await page.click('button[type="submit]')
+        # Nhấn nút login
+        await page.locator('button[type="submit"]').click()
 
         # await page.wait_for_load_state('networkidle')
         print('Login completed')
-        # await crawl_course(page, BASE_URL)
+        await crawl_course(page, BASE_URL)
         save_json()
         await browser.close() # giữ cho browser không bị đóng
         
