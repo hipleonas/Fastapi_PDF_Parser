@@ -147,3 +147,4 @@ test_sample.pdf
 # Configuration files with sensitive data
 config.ini
 secrets.json 
+.env

@@ -21,3 +21,8 @@ reportlab==4.0.4
 
 # Additional utilities
 typing-extensions==4.12.2
+
+# Web crawling / scraping
+playwright==1.37.0
+beautifulsoup4==4.12.3
+greenlet==2.0.2
